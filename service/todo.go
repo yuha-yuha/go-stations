@@ -43,7 +43,7 @@ func (s *TODOService) CreateTODO(ctx context.Context, subject, description strin
 	sqlResult := s.db.QueryRowContext(ctx, confirm, id)
 	var todo model.TODO
 	sqlResult.Scan(&subject, &description, &createdAT, &UpdatedAT)
-
+	todo.ID = int(id)
 	todo.Subject = subject
 	todo.Description = description
 	todo.CreatedAt = createdAT

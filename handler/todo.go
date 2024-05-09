@@ -24,8 +24,12 @@ func NewTODOHandler(svc *service.TODOService) *TODOHandler {
 
 // Create handles the endpoint that creates the TODO.
 func (h *TODOHandler) Create(ctx context.Context, req *model.CreateTODORequest) (*model.CreateTODOResponse, error) {
-	_, _ = h.svc.CreateTODO(ctx, "", "")
-	return &model.CreateTODOResponse{}, nil
+	todo, err := h.svc.CreateTODO(ctx, req.Subject, req.Description)
+
+	if err != nil {
+		return nil, err
+	}
+	return &model.CreateTODOResponse{TODO: *todo}, nil
 }
 
 // Read handles the endpoint that reads the TODOs.
@@ -49,6 +53,7 @@ func (h *TODOHandler) Delete(ctx context.Context, req *model.DeleteTODORequest) 
 func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		log.Println("POST")
 		len := r.ContentLength
 		body := make([]byte, len)
 		var createTodoRequest model.CreateTODORequest
@@ -60,20 +65,20 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		err = json.Unmarshal(body, &createTodoRequest)
-		log.Println("log:::", createTodoRequest)
+		log.Println("log:::", createTodoRequest.Description)
 		if err != nil {
 			log.Println(err, "64")
 			return
 		}
 
 		if createTodoRequest.Subject == "" {
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte{})
 			return
 		}
 
 		var dbResult *model.CreateTODOResponse
 		dbResult, _ = h.Create(r.Context(), &createTodoRequest)
-
 		enc := json.NewEncoder(w)
 		enc.Encode(dbResult)
 	}
