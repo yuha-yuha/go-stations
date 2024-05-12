@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 
@@ -40,8 +41,11 @@ func (h *TODOHandler) Read(ctx context.Context, req *model.ReadTODORequest) (*mo
 
 // Update handles the endpoint that updates the TODO.
 func (h *TODOHandler) Update(ctx context.Context, req *model.UpdateTODORequest) (*model.UpdateTODOResponse, error) {
-	_, _ = h.svc.UpdateTODO(ctx, 0, "", "")
-	return &model.UpdateTODOResponse{}, nil
+	result, err := h.svc.UpdateTODO(ctx, req.ID, req.Subject, req.Description)
+	if err != nil {
+		return nil, err
+	}
+	return &model.UpdateTODOResponse{TODO: *result}, nil
 }
 
 // Delete handles the endpoint that deletes the TODOs.
@@ -56,30 +60,67 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Println("POST")
 		len := r.ContentLength
 		body := make([]byte, len)
-		var createTodoRequest model.CreateTODORequest
+		var createRequest model.CreateTODORequest
 
 		_, err := r.Body.Read(body)
 		log.Println(string(body))
-		if err != nil {
-			log.Println(err, "57")
+		if err != nil && err.Error() != "EOF" {
+			log.Println(err)
 		}
 
-		err = json.Unmarshal(body, &createTodoRequest)
-		log.Println("log:::", createTodoRequest.Description)
+		err = json.Unmarshal(body, &createRequest)
+		log.Println("log:::", createRequest.Description)
 		if err != nil {
-			log.Println(err, "64")
+			log.Println(err)
 			return
 		}
 
-		if createTodoRequest.Subject == "" {
+		if createRequest.Subject == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte{})
-			return
 		}
 
 		var dbResult *model.CreateTODOResponse
-		dbResult, _ = h.Create(r.Context(), &createTodoRequest)
+		dbResult, _ = h.Create(r.Context(), &createRequest)
 		enc := json.NewEncoder(w)
 		enc.Encode(dbResult)
+
+	case "PUT":
+		len := r.ContentLength
+		body := make([]byte, len)
+
+		var updateRequest model.UpdateTODORequest
+
+		_, err := r.Body.Read(body)
+		if err != nil && err.Error() != "EOF" {
+			log.Println(err)
+			return
+		}
+
+		err = json.Unmarshal(body, &updateRequest)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		if updateRequest.ID == 0 || updateRequest.Subject == "" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+
+		var updateResponse *model.UpdateTODOResponse
+
+		updateResponse, err = h.Update(r.Context(), &updateRequest)
+
+		if err != nil {
+			if errors.Is(err, model.ErrNotFound{}) {
+				log.Println(err)
+				w.WriteHeader(http.StatusNotFound)
+			}
+
+			log.Println(err)
+			return
+		}
+
+		enc := json.NewEncoder(w)
+		enc.Encode(updateResponse)
 	}
 }
