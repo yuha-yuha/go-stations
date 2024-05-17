@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"log"
 	"time"
 
 	"github.com/TechBowl-japan/go-stations/model"
@@ -59,7 +60,52 @@ func (s *TODOService) ReadTODO(ctx context.Context, prevID, size int64) ([]*mode
 		readWithID = `SELECT id, subject, description, created_at, updated_at FROM todos WHERE id < ? ORDER BY id DESC LIMIT ?`
 	)
 
-	return nil, nil
+	todos := []*model.TODO{}
+
+	var query string
+	var rows *sql.Rows
+	var err error
+
+	if prevID == 0 {
+		query = read
+		rows, err = s.db.QueryContext(ctx, query, size)
+
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		query = readWithID
+		rows, err = s.db.QueryContext(ctx, query, prevID, size)
+
+		if err != nil {
+			return nil, err
+		}
+
+	}
+	for rows.Next() {
+		var created_at time.Time
+		var updated_at time.Time
+		var id int64
+		var subject, description string
+
+		err = rows.Scan(&id, &subject, &description, &created_at, &updated_at)
+
+		todo := model.TODO{
+			ID:          id,
+			Subject:     subject,
+			Description: description,
+			CreatedAt:   created_at,
+			UpdatedAt:   updated_at,
+		}
+		log.Print("sdfsdfsdfsdfsdfsf")
+		todos = append(todos, &todo)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return todos, nil
 }
 
 // UpdateTODO updates the TODO on DB.
