@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/TechBowl-japan/go-stations/model"
 	"github.com/TechBowl-japan/go-stations/service"
@@ -35,8 +36,12 @@ func (h *TODOHandler) Create(ctx context.Context, req *model.CreateTODORequest) 
 
 // Read handles the endpoint that reads the TODOs.
 func (h *TODOHandler) Read(ctx context.Context, req *model.ReadTODORequest) (*model.ReadTODOResponse, error) {
-	_, _ = h.svc.ReadTODO(ctx, 0, 0)
-	return &model.ReadTODOResponse{}, nil
+	todoPointers, err := h.svc.ReadTODO(ctx, req.PrevID, int64(req.Size))
+
+	if err != nil {
+		return nil, err
+	}
+	return &model.ReadTODOResponse{TODOs: todoPointers}, nil
 }
 
 // Update handles the endpoint that updates the TODO.
@@ -56,6 +61,55 @@ func (h *TODOHandler) Delete(ctx context.Context, req *model.DeleteTODORequest) 
 
 func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	case "GET":
+		var err error
+		len := r.ContentLength
+		var readRequest model.ReadTODORequest
+
+		if len != 0 {
+			body := make([]byte, len)
+			_, err = r.Body.Read(body)
+
+			if err != nil && err.Error() != "EOF" {
+				log.Println(err)
+			}
+
+			err = json.Unmarshal(body, &readRequest)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		} else {
+			q := r.URL.Query()
+			prevID, err := strconv.Atoi(q.Get("prev_id"))
+			if err != nil {
+				log.Println(err)
+			}
+			size, err := strconv.Atoi(q.Get("size"))
+			if err != nil {
+				log.Println(err)
+			}
+
+			readRequest.PrevID = int64(prevID)
+			if size == 0 {
+				readRequest.Size = 5
+			} else {
+				readRequest.Size = size
+			}
+		}
+
+		var readResponse *model.ReadTODOResponse
+
+		readResponse, err = h.Read(r.Context(), &readRequest)
+		//m, _ := json.Marshal(readResponse)
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		enc := json.NewEncoder(w)
+		enc.Encode(readResponse)
+
 	case "POST":
 		log.Println("POST")
 		len := r.ContentLength
@@ -101,7 +155,6 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			return
 		}
-
 		if updateRequest.ID == 0 || updateRequest.Subject == "" {
 			w.WriteHeader(http.StatusBadRequest)
 		}
